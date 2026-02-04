@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="pt-br" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Calc Pro - AI Edition</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.7.2/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { background-color: #f9fafb; font-family: 'Inter', sans-serif; color: #1e293b; }
+        .shadcn-card { background: white; border: 1px solid #e2e8f0; border-radius: 0.75rem; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .input-shadcn { border: 1px solid #e2e8f0; border-radius: 0.375rem; transition: all 0.2s; }
+        .input-shadcn:focus { outline: 2px solid #3b82f6; border-color: transparent; }
+        .modal { backdrop-filter: blur(8px); }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-4xl mx-auto">
+        <header class="mb-10 text-center">
+            <h1 class="text-3xl font-bold tracking-tight">3D Calc <span class="text-blue-600">AI</span></h1>
+            <p class="text-slate-500 mt-2">Cálculo instantâneo com análise de inteligência artificial.</p>
+        </header>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="shadcn-card p-6 space-y-4">
+                <div class="flex items-center gap-2 mb-2 border-b pb-3 text-slate-800">
+                    <i data-lucide="calculator" class="w-5 h-5 text-blue-600"></i>
+                    <h2 class="font-semibold text-lg">Parâmetros</h2>
+                </div>
+                
+                <div class="form-control">
+                    <label class="label"><span class="label-text font-medium">Preço Filamento (R$/kg)</span></label>
+                    <input type="number" id="precoFilamento" class="input input-bordered input-shadcn auto-calc" placeholder="120" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text font-medium">Peso da Peça (g)</span></label>
+                    <input type="number" id="pesoPeca" class="input input-bordered input-shadcn auto-calc" placeholder="150" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text font-medium">Tempo de Impressão (h)</span></label>
+                    <input type="number" id="tempoImpressao" class="input input-bordered input-shadcn auto-calc" placeholder="5" />
+                </div>
+                <div class="form-control">
+                    <label class="label"><span class="label-text font-medium">Margem de Lucro (%)</span></label>
+                    <input type="number" id="margemLucro" value="100" class="input input-bordered input-shadcn auto-calc" />
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-4">
+                <div class="shadcn-card p-8 bg-slate-900 text-white border-none shadow-xl">
+                    <h2 class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-4">Total Estimado</h2>
+                    <div class="text-4xl font-bold text-blue-400" id="resTotalDisplay">R$ 0,00</div>
+                    <div class="mt-6 pt-4 border-t border-slate-800 text-[10px] text-slate-500 uppercase flex justify-between font-mono">
+                        <span>Material: <em id="subMaterial" class="text-slate-300 not-italic">R$ 0,00</em></span>
+                        <span>Energia: <em id="subEnergia" class="text-slate-300 not-italic">R$ 0,00</em></span>
+                    </div>
+                </div>
+
+                <button onclick="copiarParaPlanilha()" class="btn bg-white border-slate-200 hover:bg-slate-50 text-slate-800 w-full shadow-sm">
+                    <i data-lucide="table-2" class="w-4 h-4"></i> Copiar para Planilha
+                </button>
+
+                <button onclick="analisarComGemini()" class="btn bg-blue-600 hover:bg-blue-700 border-none text-white w-full shadow-lg shadow-blue-500/20">
+                    <i data-lucide="sparkles" class="w-4 h-4"></i> Analisar com Gemini IA
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <input type="checkbox" id="ai_modal" class="modal-toggle" />
+    <div class="modal" role="dialog">
+        <div class="modal-box bg-white border border-slate-200 p-0 overflow-hidden max-w-md">
+            <div class="p-6 border-b bg-slate-50 flex items-center justify-between">
+                <h3 class="font-bold text-slate-900 flex items-center gap-2">
+                    <i data-lucide="brain" class="text-blue-600 w-5 h-5"></i> Insight do Gemini
+                </h3>
+                <label for="ai_modal" class="btn btn-ghost btn-xs">×</label>
+            </div>
+            <div class="p-6">
+                <div id="ai_loader" class="hidden flex flex-col items-center py-4">
+                    <div class="w-8 h-8 border-4 border-blue-600 border-t-transparent animate-spin rounded-full mb-2"></div>
+                    <span class="text-xs text-slate-400">Processando mercado...</span>
+                </div>
+                <div id="ai_response" class="text-sm text-slate-600 leading-relaxed whitespace-pre-wrap"></div>
+            </div>
+            <div class="p-4 bg-slate-50 text-right">
+                <label for="ai_modal" class="btn btn-sm bg-slate-900 text-white border-none px-6 font-medium">Entendido</label>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { GoogleGenerativeAI } from "https://esm.run/@google/generative-ai";
+
+        // SUA CHAVE DE API
+        const API_KEY = "AIzaSyC7x79IdJaqeI0IgsIsIXm_EK3q_iJDz1k"; 
+        const genAI = new GoogleGenerativeAI(API_KEY);
+        
+        lucide.createIcons();
+
+        function calcular() {
+            const precoF = parseFloat(document.getElementById('precoFilamento').value) || 0;
+            const peso = parseFloat(document.getElementById('pesoPeca').value) || 0;
+            const tempo = parseFloat(document.getElementById('tempoImpressao').value) || 0;
+            const margem = parseFloat(document.getElementById('margemLucro').value) || 0;
+
+            const custoMaterial = (precoF / 1000) * peso;
+            const custoEnergia = (150 / 1000) * tempo * 0.85; 
+            const total = (custoMaterial + custoEnergia) * (1 + (margem / 100));
+
+            document.getElementById('resTotalDisplay').innerText = `R$ ${total.toFixed(2).replace('.', ',')}`;
+            document.getElementById('subMaterial').innerText = `R$ ${custoMaterial.toFixed(2)}`;
+            document.getElementById('subEnergia').innerText = `R$ ${custoEnergia.toFixed(2)}`;
+
+            return { material: custoMaterial, energia: custoEnergia, total: total, tempo, peso, margem };
+        }
+
+        // CORREÇÃO PLANILHA: Removido "g", "h" e "|" para aceitar fórmulas no Excel
+        window.copiarParaPlanilha = function() {
+            const d = calcular();
+            const colunas = [
+                d.material.toFixed(2).replace('.', ','),
+                d.energia.toFixed(2).replace('.', ','),
+                d.peso.toString().replace('.', ','),
+                d.tempo.toString().replace('.', ','),
+                d.total.toFixed(2).replace('.', ',')
+            ];
+            const row = colunas.join('\t'); // Usa TAB para separar células
+            
+            navigator.clipboard.writeText(row).then(() => {
+                alert("Copiado! Cole no Excel ou Google Sheets.");
+            });
+        };
+
+        window.analisarComGemini = async function() {
+            const d = calcular();
+            const responseDiv = document.getElementById('ai_response');
+            const loader = document.getElementById('ai_loader');
+
+            document.getElementById('ai_modal').checked = true;
+            loader.classList.remove('hidden');
+            responseDiv.innerText = "";
+
+            try {
+                // Forçamos o modelo 1.5-flash que é o mais compatível com web livre
+                const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+                const prompt = `Analise este orçamento 3D: Material R$${d.material.toFixed(2)}, Tempo ${d.tempo}h, Margem ${d.margem}%, Total R$${d.total.toFixed(2)}. Dê 3 dicas curtas de lucro.`;
+
+                const result = await model.generateContent(prompt);
+                const response = await result.response;
+                
+                loader.classList.add('hidden');
+                responseDiv.innerText = response.text();
+            } catch (e) {
+                loader.classList.add('hidden');
+                // Se o erro for de conexão local, avisamos o usuário
+                responseDiv.innerText = "Atenção: Para a IA funcionar, você precisa abrir este arquivo usando o 'Live Server' no VS Code ou hospedar em um site (como GitHub Pages). O navegador bloqueia a IA em arquivos abertos diretamente (C:/...)";
+                console.error("Erro da API:", e);
+            }
+        };
+
+        document.querySelectorAll('.auto-calc').forEach(el => el.addEventListener('input', calcular));
+    </script>
+</body>
+</html>
